@@ -1,0 +1,172 @@
+<meta charset="UTF-8">
+<style>
+    #InputCode,
+    #OutputCode
+    {
+        width: 50%;
+        height: 75vh;
+    }
+
+    #CommentText
+    {
+        width: 100%;
+        height: 15vh;
+    }
+</style>
+<div>
+    <textarea id="InputCode" placeholder="Input code" spellcheck="false"/></textarea>
+    <textarea id="OutputCode" placeholder="Output code" spellcheck="false"></textarea>
+</div>
+<div>
+    <textarea id="CommentText" placeholder="Comments" disabled>
+    </textarea>
+</div>
+<div>
+    <button onclick="Hash()">Hash</button>
+    <input id="HashIsSigned" name="HashIsSigned" type="checkbox" checked="checked"/>
+    <label for="HashIsSigned">Signed</label>
+    <input id="HashHasSuffix" name="HashHasSuffix" type="checkbox"/>
+    <label for="HashHasSuffix">Suffix</label>
+</div>
+<script>
+    function GetHash(
+        text,
+        seed
+        )
+    {
+        var
+            character_index,
+            hash;
+
+        if ( seed === undefined )
+        {
+            hash = 0x811c9dc5;
+        }
+        else
+        {
+            hash = seed;
+        }
+
+        for ( character_index = 0;
+              character_index < text.length;
+              ++character_index )
+        {
+            hash ^= text.charCodeAt( character_index );
+            hash += ( hash << 1 ) + ( hash << 4 ) + ( hash << 7 ) + ( hash << 8 ) + ( hash << 24 );
+        }
+
+        return hash >>> 0;
+    }
+
+    // ~~
+
+    function Hash(
+        )
+    {
+        var
+            input_code,
+            comment_text,
+            constant_name,
+            hash,
+            hash_has_suffix,
+            hash_is_signed,
+            hash_map,
+            line,
+            line_array,
+            line_index,
+            line_is_constant,
+            space_count,
+            trimmed_line;
+
+        input_code = document.getElementById( "InputCode" ).value;
+        hash_is_signed = document.getElementById( "HashIsSigned" ).checked;
+        hash_has_suffix = document.getElementById( "HashHasSuffix" ).checked;
+
+        comment_text = "";
+        hash_map = new Map();
+
+        line_array = input_code.split( '\r' ).join( "" ).split( '\n' );
+        line_is_constant = false;
+
+        for ( line_index = 0;
+              line_index < line_array.length;
+              ++line_index )
+        {
+            line = line_array[ line_index ];
+            trimmed_line = line.trim();
+            space_count = line.indexOf( trimmed_line );
+
+            if ( trimmed_line.startsWith( "enum " )
+                 || trimmed_line.indexOf( " enum " ) >= 0 )
+            {
+                line_is_constant = true;
+
+                if ( trimmed_line.indexOf( " : int" ) >= 0 )
+                {
+                    hash_is_signed = true;
+                    hash_has_suffix = false;
+                }
+                else if ( trimmed_line.indexOf( " : uint" ) >= 0 )
+                {
+                    hash_is_signed = false;
+                    hash_has_suffix = true;
+                }
+
+                if ( !trimmed_line.endsWith( '{' ) )
+                {
+                    ++line_index;
+                }
+            }
+            else if ( trimmed_line == "}" )
+            {
+                line_is_constant = false;
+                hash_map = new Map();
+            }
+            else if ( line_is_constant )
+            {
+                constant_name = trimmed_line.split( ',' )[ 0 ].split( '=' )[ 0 ].trim();
+                hash = GetHash( constant_name );
+
+                if ( hash_is_signed
+                     && hash >= 2147483648 )
+                {
+                    hash -= 4294967296;
+                }
+
+                line = line.substring( 0, space_count ) + constant_name + " = " + hash;
+
+                if ( !hash_is_signed
+                     && hash_has_suffix )
+                {
+                    line += 'u';
+                }
+
+                if ( trimmed_line.endsWith( ',' ) )
+                {
+                    line += ',';
+                }
+
+                if ( hash_map.has( hash ) )
+                {
+                    if ( comment_text !== "" )
+                    {
+                        comment_text += "\n";
+                    }
+
+                    comment_text += "Duplicate hash : " + hash + " (" + constant_name + ")";
+                }
+                else
+                {
+                    hash_map.set( hash, constant_name );
+                }
+
+                line_array[ line_index ] = line;
+            }
+        }
+
+        document.getElementById( "OutputCode" ).value = line_array.join( '\n' );
+        document.getElementById( "CommentText" ).value = comment_text;
+    }
+
+    document.body.innerHTML = document.body.innerHTML.replace( /(<(pre|script|style|codearea)[^]+?<\/\2)|(^|>)\s+|\s+(?=<|$)/g, "$1$3" );
+</script>
